@@ -22,7 +22,7 @@ module.exports = {
      * @param testcallback, used for tests only
      */
     router: function(request, response, next, testcallback) {
-
+        console.log("routereas!");
         // validate the game, it's set up so you can optionally
         // pass your public key in through the url which is easier
         // for testing
