@@ -136,7 +136,7 @@ var leaderboards = module.exports = {
             score[x] = options[x];
         }
 
-        score.hash = md5([options.publickey, options.ip, options.table, options.playername,
+        score.hash = md5([options.publickey, options.ip, options.table,
                           options.playerid, options.highest, options.source].join("."));
         score.points = options.points;
 
