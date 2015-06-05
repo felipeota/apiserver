@@ -5,9 +5,14 @@ var db = require(__dirname + "/database.js"),
     errorcodes = require(__dirname + "/errorcodes.js").errorcodes,
     agora = require("agoragames-leaderboard"),
     url = require('url'),
+    redis = require('redis'),
     redisURL = url.parse(process.env.REDISCLOUD_URL || "redis://localhost:6379");
-var redisOptions = {'host':redisURL.hostname, 'port':redisURL.port};
-var lb = new agora("leaderboard", null, redisOptions);
+var client = redis.createClient(redisURL.port, redisURL.hostname, {'no_ready_check': true});
+if (redisURL.auth && redisURL.auth.split(":").length > 1) {
+  client.auth(redisURL.auth.split(":")[1]);
+}
+var redisOptions = {};
+var lb = new agora("leaderboard", null, {'redis_connection':client});
 lb.rankMemberIn('test_level', 'pepe', 25, 'pepe', function(reply){
   console.log(reply);
 })
