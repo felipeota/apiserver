@@ -2,7 +2,15 @@ var db = require(__dirname + "/database.js"),
     md5 = require(__dirname + "/md5.js"),
     utils = require(__dirname + "/utils.js"),
     datetime = require(__dirname + "/datetime.js"),
-    errorcodes = require(__dirname + "/errorcodes.js").errorcodes;
+    errorcodes = require(__dirname + "/errorcodes.js").errorcodes,
+    agora = require("agoragames-leaderboard"),
+    url = require('url'),
+    redisURL = url.parse(process.env.REDISCLOUD_URL || "redis://localhost:6379");
+var redisOptions = {'host':redisURL.hostname, 'port':redisURL.port};
+var lb = new agora("leaderboard", null, redisOptions);
+lb.rankMemberIn('test_level', 'pepe', 25, 'pepe', function(reply){
+  console.log(reply);
+})
 
 var leaderboards = module.exports = {
 
@@ -11,92 +19,35 @@ var leaderboards = module.exports = {
      * @param options:  table, url, highest, mode, page, perpage, filters ass. array, friendslist,
      * @param callback function (error, errorcode, numscores, scores)
      */
+
+    global: function(options, callback){
+
+    },
+
     list: function(options, callback) {
-
-        // defaults
-        options.page = options.page || 1;
-        options.perpage = options.perpage || 20;
-        options.highest = options.lowest !== true;
-
-        var query = {
-            filter: {
-                publickey: options.publickey,
-                table: options.table
-            },
-            limit: options.perpage,
-            skip: (options.page - 1) * options.perpage,
-            sort: {}
-        };
-
-        // per-source website or device scores, websites
-		// get truncated to domain.com
-        if(options.source) {
-            query.filter.source = options.source.indexOf("://") > -1 ? utils.baseurl(options.source) : options.source;
-        }
-
-        if(options.filters && Object.keys(options.filters).length > 0) {
-            query.filter.fields = {};
-            for(var x in options.filters) {
-                query.filter.fields[x] = options.filters[x];
-            }
-        }
 
         // filtering for playerids
         var playerids = options.friendslist || [];
 
-        if(options.playerid && !options.excludeplayerid) {
-            playerids.push(options.playerid);
+        console.log(playerids);
+        console.log(options.playerid);
+        if (playerids.length > 0){
+          console.log(playerids);
+          playerids.push(options.playerid);
+          lb.rankedInListIn(options.table, playerids, {'withMemberData':true}, function(ranks){
+            console.log(ranks);
+            cleanRanks(ranks);
+            callback(null, errorcodes.NoError, 0, ranks);
+          });
         }
-
-		if(playerids.length > 1) {
-            query.filter.playerid = { $in: playerids };
-        } else if(playerids.length == 1) {
-            query.filter.playerid = playerids[0];
+        else{
+          console.log("around me");
+          lb.aroundMeIn(options.table, options.playerid, {'withMemberData':true}, function(ranks){
+            console.log(ranks);
+            cleanRanks(ranks);
+            callback(null, errorcodes.NoError, 0, ranks);
+          });
         }
-
-        // date mode
-        options.mode = (options.mode || "alltime").toLowerCase();
-
-        switch(options.mode) {
-            case "today":
-                query.filter.date = {"$gte": datetime.now - (24 * 60 * 60)};
-                break;
-
-           case "last7days":
-               query.filter.date = {"$gte": (datetime.now - (7 * 24 * 60 * 60))};
-                break;
-
-            case "last30days":
-                query.filter.date = {"$gte": (datetime.now - (30 * 24 * 60 * 60))};
-                break;
-        }
-
-        // sorting
-        if(options.mode == "newest") {
-            query.sort = "-date";
-        } else {
-            query.sort = options.highest ? "-points" : "points";
-        }
-
-        // the scores
-        db.LeaderboardScore.find(query.filter).sort(query.sort).limit(query.limit).skip(query.skip).exec(function(error, scores){
-
-            if(error) {
-                callback("unable to load scores: " + error + " (api.leaderboards.list:99)", errorcodes.GeneralError);
-                return;
-            }
-
-            db.LeaderboardScore.count(query.filter, function(error, numscores) {
-
-                if(error) {
-                    callback("unable to count scores: " + error + " (api.leaderboards.list:104)", errorcodes.GeneralError);
-                    return;
-                }
-
-                scores = scores || [];
-                callback(null, errorcodes.NoError, numscores, clean(scores, query.skip + 1));
-            });
-        });
     },
 
     /**
@@ -105,7 +56,7 @@ var leaderboards = module.exports = {
      * @param callback function(error, errorcode)
      */
     save: function(options, callback) {
-
+        console.log("saving");
         if(!options.playername) {
             callback("no name (" + options.playername + ")", errorcodes.InvalidName);
             return;
@@ -116,84 +67,16 @@ var leaderboards = module.exports = {
             return;
         }
 
-        if(options.source ) {
-            options.source = utils.baseurl(options.source);
-        }
-
         options.highest = options.lowest !== true;
 
         // small cleanup
         var score = {};
 
-        // fields that aren't relevant to our score
-        var exclude = ["allowduplicates", "highest", "lowest", "numfields", "section", "action",
-                        "date", "url", "rank", "points", "page", "perpage", "global", "filters", "debug"];
-
-        for(var x in options) {
-            if(exclude.indexOf(x) > -1) {
-                continue;
-            }
-            score[x] = options[x];
-        }
-
-        score.hash = md5([options.publickey, options.ip, options.table,
-                          options.playerid, options.highest, options.source].join("."));
-        score.points = options.points;
-
 	score.date = datetime.now;
 
-        // check bans
-
         // insert
-        if(options.allowduplicates === true) {
-            var mscore = new db.LeaderboardScore(score);
-            return mscore.save(function(error, item) {
-                if(error) {
-                    return callback("unable to insert score: " + error + " (api.leaderboards.save:166)", errorcodes.GeneralError);
-                }
-
-                return callback(null, errorcodes.NoError, item._id, item);
-            });
-        }
-
-        // check for duplicates, by default we will assume highest unless lowest is explicitly specified
-        var sort = options.highest ? "-score" : "score",
-            query = {
-                hash: score.hash
-            };
-
-        db.LeaderboardScore.findOne(query).sort(sort).exec(function(error, dupe) {
-            if(error) {
-                return callback("unable to check dupes: " + error + " (api.leaderboards.save:212)", errorcodes.GeneralError);
-            }
-
-            // no duplicates
-            if(!dupe) {
-                var mscore = new db.LeaderboardScore(score);
-                return mscore.save(function(error) {
-
-                    if(error) {
-                        return callback("unable to insert score: " + error + " (api.leaderboards.save:212)", errorcodes.GeneralError);
-                    }
-
-                    return callback(null, errorcodes.NoError);
-                });
-            }
-
-            // check if the new score is higher or lower
-            if((dupe.points > score.points && options.highest) || (dupe.points < score.points && !options.highest)) {
-                callback(null, errorcodes.NotBestScore);
-                return;
-            }
-
-            db.LeaderboardScore.update( { _id: dupe._id }, { points: score.points, date: score.date, fields: score.fields }, { upsert: false }, function(error, item) {
-                if(error) {
-                    callback("unable to update score: " + error + " (api.leaderboards.save:240)", errorcodes.GeneralError);
-                    return;
-                }
-
-                callback(null, errorcodes.NoError, item._id, item);
-            });
+        lb.rankMemberIn(options.table, options.playerid, options.points, options.playername, function(reply){
+          callback(null, errorcodes.NoError, 0, options);
         });
     },
 
@@ -255,6 +138,16 @@ var leaderboards = module.exports = {
         });
     }
 };
+
+function cleanRanks(ranks){
+  var i, len;
+  for(i=0, len=ranks.length; i<len; i++){
+    var rank = ranks[i];
+    rank.points = rank.score || 0;
+    rank.playerid = rank.member;
+    rank.playername = rank.member_data || "";
+  }
+}
 
 /**
  * Strips unnceessary data and tidies a score object

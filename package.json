@@ -4,9 +4,10 @@
   "dependencies": {
     "express": "2.5.2",
     "geoip-native": "^0.0.8",
-    "mongodb": "^1.4.23",
+    "mongodb": "~1.4.38",
     "mongoose": "3.8.20",
-    "request": "2.49.0"
+    "request": "2.49.0",
+    "agoragames-leaderboard": "2.1.0"
   },
   "engines": {
     "node": "0.10.32",

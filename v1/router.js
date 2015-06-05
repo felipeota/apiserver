@@ -22,7 +22,6 @@ module.exports = {
      * @param testcallback, used for tests only
      */
     router: function(request, response, next, testcallback) {
-        console.log("routereas!");
         // validate the game, it's set up so you can optionally
         // pass your public key in through the url which is easier
         // for testing
@@ -37,8 +36,8 @@ module.exports = {
             return output.terminate(payload, response, 1, "Invalid request (router.js:41)");
         }
 
-        var config = games.load(publickey);
-		
+        var config = {};
+
         if(!config) {
             if(testcallback) {
                 testcallback(false);
@@ -46,7 +45,7 @@ module.exports = {
 
             return output.terminate(payload, response, 1, "Invalid game (router.js:52)");
         }
-		
+
         if(!request.body.data) {
 
             if(testcallback) {
@@ -56,7 +55,9 @@ module.exports = {
             return output.terminate(payload, response, 1, "No posted data (router.js:61)");
         }
 
-        var decrypted = requestauth.validate(request.body.data, request.body.hash, config.privatekey);
+        var privatekey = "T2lA5jhQ3h8AyHRaClTHpF39Bj7WUdJx";
+
+        var decrypted = requestauth.validate(request.body.data, request.body.hash, privatekey);
 
         if(!decrypted) {
 
@@ -66,7 +67,7 @@ module.exports = {
 
             return output.terminate(payload, response, 1, "Invalid posted data (router.js:72)");
         }
-		
+
         var payload;
 
         try {
@@ -83,7 +84,7 @@ module.exports = {
         payload.ip = request.ip;
         payload.url = "https://" + request.headers.host + request.url;
 		payload.publickey = request.query.publickey;
-		
+
 		if(urlparams.query.debug) {
             payload.debug = urlparams.query.debug;
 		}
@@ -99,13 +100,6 @@ module.exports = {
         }
 
         // make sure game or section hasn't been disabled
-        if(!config[payload.section]) {
-            if(testcallback) {
-                testcallback(false);
-            }
-
-            return output.terminate(payload, response, sections[payload.section].sectionCode, "Section '" + payload.section + "' has been disabled for this game (router.js:113)");
-        }
 
         if(!sections[payload.section] || !sections[payload.section][payload.action]) {
             if(testcallback) {

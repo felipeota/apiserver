@@ -1,15 +1,15 @@
 var express = require("express"),
     querystring = require("querystring"),
     v1 = require(__dirname + "/v1/router.js");
-    
-require(__dirname + "/api/database.js"), // to trigger the setup
+
+//require(__dirname + "/api/database.js"), // to trigger the setup
 require(__dirname + "/api/ping.js"); // to keep the app awake
-	
+
 var app = express.createServer();
 
 // Basic request preparation and stuffing post data into req
 var prepareRequests = function(request, response, next) {
-    
+
     request.ip = request.headers["x-forwarded-for"] || request.connection.remoteAddress;
 
     // cross-origin request headers
