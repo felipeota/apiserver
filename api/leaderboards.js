@@ -75,11 +75,16 @@ var leaderboards = module.exports = {
         // small cleanup
         var score = {};
 
-	score.date = datetime.now;
-
-        // insert
-        lb.rankMemberIn(options.table, options.playerid, options.points, options.playername, function(reply){
-          callback(null, errorcodes.NoError, 0, options);
+        score.date = datetime.now;
+        lb.scoreForIn(options.table, options.playerid, function(currentScore){
+          if (currentScore != null && currentScore < options.points){
+            lb.rankMemberIn(options.table, options.playerid, options.points, options.playername, function(reply){
+              callback(null, errorcodes.NoError, 0, options);
+            });
+          }
+          else{
+            callback(null, errorcodes.NoError, 0, options);
+          }
         });
     },
 
