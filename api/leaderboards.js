@@ -41,16 +41,14 @@ var leaderboards = module.exports = {
           playerids.push(options.playerid);
           lb.rankedInListIn(options.table, playerids, {'withMemberData':true}, function(ranks){
             console.log(ranks);
-            cleanRanks(ranks);
-            callback(null, errorcodes.NoError, 0, ranks);
+            callback(null, errorcodes.NoError, 0, cleanRanks(ranks));
           });
         }
         else{
           console.log("around me");
           lb.aroundMeIn(options.table, options.playerid, {'withMemberData':true}, function(ranks){
             console.log(ranks);
-            cleanRanks(ranks);
-            callback(null, errorcodes.NoError, 0, ranks);
+            callback(null, errorcodes.NoError, 0, cleanRanks(ranks));
           });
         }
     },
@@ -145,13 +143,17 @@ var leaderboards = module.exports = {
 };
 
 function cleanRanks(ranks){
-  var i, len;
+  var i, len, newRanks = [];
   for(i=0, len=ranks.length; i<len; i++){
     var rank = ranks[i];
-    rank.points = rank.score || 0;
-    rank.playerid = rank.member;
-    rank.playername = rank.member_data || "";
+    if (rank.score){
+      rank.points = rank.score || 0;
+      rank.playerid = rank.member;
+      rank.playername = rank.member_data || "";
+      newRanks.push(rank);
+    }
   }
+  return newRanks;
 }
 
 /**
